@@ -1,4 +1,4 @@
-# Enterprise Knowledge Graph Builder
+# Knowledge Graph Builder
 
 ## Project Overview
 Convert unstructured enterprise documents into structured, explainable knowledge graphs for analysis and insight discovery.
