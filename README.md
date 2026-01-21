@@ -6,7 +6,7 @@ Convert unstructured enterprise documents into structured, explainable knowledge
 
 ## Architecture
 
-![Enterprise Knowledge Graph Architecture](assets/architecture.png)
+![Enterprise Knowledge Graph Architecture](assets/architecture.jpeg)
 
 
 ## Tech Stack
