@@ -3,20 +3,11 @@
 ## Project Overview
 Convert unstructured enterprise documents into structured, explainable knowledge graphs for analysis and insight discovery.
 
+
 ## Architecture
-```
-User Input (Text/PDF)
-        ↓
-   React Frontend (Port 5173)
-        ↓
-   FastAPI Backend (Port 8000)
-        ↓
-   SpaCy NLP Engine
-        ↓
-   Neo4j Graph Database
-        ↓
-   Interactive Visualization
-```
+
+![Enterprise Knowledge Graph Architecture](assets/architecture.png)
+
 
 ## Tech Stack
 

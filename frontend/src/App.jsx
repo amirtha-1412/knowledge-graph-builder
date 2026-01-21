@@ -80,7 +80,7 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>Enterprise Knowledge Graph Builder</h1>
+        <h1>Knowledge Graph Builder</h1>
         <p>Convert unstructured documents into explainable knowledge graphs</p>
       </header>
 
