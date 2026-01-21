@@ -76,28 +76,3 @@ knowledge-graph-builder/
 └── README.md
 ```
 
-## Features
-- Text input processing
-- PDF document upload
-- Entity extraction (PERSON, ORG, GPE, DATE)
-- Explainable relationship inference
-- Interactive graph visualization
-- Real-time insights and analytics
-- Session management
-
-## Development Status
-- Day 1: Backend and Frontend Bootstrap - COMPLETE
-
-## Next Steps
-- Day 2: NLP Entity Extraction Module
-- Day 3: Relationship Inference Logic
-- Day 4: Neo4j Integration
-- Day 5: API Endpoints Implementation
-- Day 6: Testing and Refinement
-- Day 7: Deployment
-
-## API Endpoints (Planned)
-- POST /build - Build graph from text
-- POST /upload - Build graph from PDF
-- DELETE /clear - Clear graph by session
-- GET /insights - Get graph analytics
