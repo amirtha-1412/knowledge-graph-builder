@@ -1,0 +1,101 @@
+.input-panel {
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.input-panel h2 {
+    margin-top: 0;
+    color: #333;
+    font-size: 1.5rem;
+}
+
+.text-input-form {
+    margin-bottom: 20px;
+}
+
+.text-input-form label,
+.file-input-section label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #555;
+}
+
+.text-input-form textarea {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 14px;
+    resize: vertical;
+    box-sizing: border-box;
+}
+
+.text-input-form textarea:focus {
+    outline: none;
+    border-color: #3498db;
+}
+
+.text-input-form button,
+.file-input-section button,
+.clear-button {
+    width: 100%;
+    padding: 12px;
+    margin-top: 10px;
+    background-color: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.text-input-form button:hover,
+.file-input-section button:hover {
+    background-color: #2980b9;
+}
+
+.text-input-form button:disabled,
+.file-input-section button:disabled,
+.clear-button:disabled {
+    background-color: #bdc3c7;
+    cursor: not-allowed;
+}
+
+.divider {
+    text-align: center;
+    margin: 20px 0;
+    color: #999;
+    font-weight: 600;
+}
+
+.file-input-section {
+    margin-bottom: 20px;
+}
+
+.file-input-section input[type="file"] {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.file-name {
+    font-size: 14px;
+    color: #555;
+    margin: 5px 0;
+}
+
+.clear-button {
+    background-color: #e74c3c;
+}
+
+.clear-button:hover {
+    background-color: #c0392b;
+}
