@@ -37,4 +37,9 @@ export const api = {
     const response = await fetch(`${API_BASE_URL}/insights?session_id=${sessionId}`);
     return response.json();
   },
+
+  getGraphData: async (sessionId) => {
+    const response = await fetch(`${API_BASE_URL}/graph-data?session_id=${sessionId}`);
+    return response.json();
+  },
 };

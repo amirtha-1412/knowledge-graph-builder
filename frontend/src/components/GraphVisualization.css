@@ -1,13 +1,291 @@
 .graph-container {
-  width: 100%;
-  height: 600px;
-  border: 2px solid #ddd;
-  border-radius: 8px;
-  overflow: hidden;
-  background-color: #f9f9f9;
+    position: relative;
+    width: 100%;
+    height: 700px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #f9fafb;
+}
+
+/* Fullscreen mode */
+.graph-container:fullscreen {
+    height: 100vh !important;
+    width: 100vw !important;
+    border: none !important;
+    border-radius: 0 !important;
+    background: #f9fafb !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+    max-height: none !important;
+}
+
+.graph-container:fullscreen .graph-canvas {
+    height: 100vh !important;
+    width: 100vw !important;
+}
+
+/* Hide legend toggle and legend in fullscreen mode */
+.graph-container:fullscreen .legend-toggle,
+.graph-container:fullscreen .graph-legend {
+    display: none !important;
+}
+
+/* Ensure no white backgrounds in fullscreen */
+.graph-container:fullscreen * {
+    background: transparent !important;
+}
+
+.graph-container:fullscreen {
+    background: #f9fafb !important;
+}
+
+.graph-container:fullscreen .graph-controls {
+    background: white !important;
 }
 
 .graph-canvas {
-  width: 100%;
-  height: 100%;
+    width: 100%;
+    height: 100%;
+    position: relative;
+    z-index: 1;
+}
+
+.graph-container:fullscreen .graph-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1;
+}
+
+/* Interactive Controls */
+.graph-controls {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    gap: 8px;
+    z-index: 10;
+    background: white;
+    padding: 10px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.graph-controls button,
+.graph-controls select {
+    padding: 8px 14px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: white;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: #374151;
+    transition: all 0.2s;
+}
+
+.graph-controls button:hover,
+.graph-controls select:hover {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+}
+
+.graph-controls button:active {
+    transform: scale(0.97);
+}
+
+.graph-controls select {
+    cursor: pointer;
+}
+
+/* Legend Toggle Button */
+.legend-toggle {
+    position: absolute;
+    bottom: 20px;
+    left: 10px;
+    z-index: 11;
+    padding: 10px 16px;
+    background: white;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: #374151;
+    transition: all 0.2s;
+}
+
+.legend-toggle:hover {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+}
+
+.legend-toggle:active {
+    transform: scale(0.97);
+}
+
+/* Color Legend */
+.graph-legend {
+    position: absolute;
+    bottom: 60px;
+    left: 10px;
+    background: white;
+    padding: 14px 16px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 10;
+    max-height: 350px;
+    overflow-y: auto;
+    min-width: 200px;
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.graph-legend h4 {
+    margin: 0 0 12px 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: #111827;
+    border-bottom: 2px solid #e5e7eb;
+    padding-bottom: 8px;
+}
+
+.legend-items {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: #4b5563;
+    padding: 4px 0;
+}
+
+.color-dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px #e5e7eb, 0 2px 4px rgba(0, 0, 0, 0.1);
+    flex-shrink: 0;
+}
+
+/* Loading State */
+.graph-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    padding: 20px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    z-index: 5;
+}
+
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #e5e7eb;
+    border-top-color: #3b82f6;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 12px;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.graph-loading p {
+    color: #6b7280;
+    font-size: 14px;
+    margin: 0;
+}
+
+/* Error State */
+.graph-error {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    padding: 20px;
+    background: white;
+    border-radius: 8px;
+    border-left: 4px solid #ef4444;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    z-index: 5;
+}
+
+.graph-error p {
+    color: #ef4444;
+    font-size: 14px;
+    margin: 0;
+    font-weight: 500;
+}
+
+/* Scrollbar Styling for Legend */
+.graph-legend::-webkit-scrollbar {
+    width: 6px;
+}
+
+.graph-legend::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 3px;
+}
+
+.graph-legend::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+.graph-legend::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .graph-controls {
+        flex-wrap: wrap;
+        max-width: calc(100% - 20px);
+    }
+
+    .graph-controls button,
+    .graph-controls select {
+        font-size: 11px;
+        padding: 6px 10px;
+    }
+
+    .graph-legend {
+        max-height: 250px;
+        font-size: 12px;
+    }
+
+    .graph-container {
+        height: 600px;
+    }
 }

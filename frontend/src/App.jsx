@@ -14,23 +14,25 @@ function App() {
   const [error, setError] = useState(null);
 
   const handleBuildGraph = async (text) => {
+    if (!text.trim() || loading) return;
+
     setLoading(true);
     setError(null);
 
     try {
       const response = await api.buildGraph(text, sessionId);
 
-      if (response.entities && response.relationships) {
-        setEntities(response.entities);
-        setRelationships(response.relationships);
+      if (response && response.session_id) {
+        setEntities(response.entities || []);
+        setRelationships(response.relationships || []);
         setSessionId(response.session_id);
 
-        // Fetch insights
+        // Fetch insights using the confirmed session_id from response
         const insightsData = await api.getInsights(response.session_id);
         setInsights(insightsData);
       }
     } catch (err) {
-      setError('Failed to build graph. Please ensure the backend is running.');
+      setError('Failed to build graph. Please check if the backend is running and Neo4j is connected.');
       console.error(err);
     } finally {
       setLoading(false);
@@ -104,10 +106,9 @@ function App() {
         <div className="right-panel">
           <div className="graph-section">
             <h2>Knowledge Graph Visualization</h2>
-            {entities.length > 0 ? (
+            {sessionId ? (
               <GraphVisualization
-                entities={entities}
-                relationships={relationships}
+                sessionId={sessionId}
               />
             ) : (
               <div className="empty-graph">

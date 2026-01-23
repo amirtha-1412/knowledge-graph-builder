@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from app.models import GraphBuildRequest, GraphBuildResponse, GraphInsights
+from app.models import GraphBuildRequest, GraphBuildResponse, GraphInsights, GraphVisualizationData
 from app.nlp_engine import extract_entities
 from app.relationship_logic import infer_relationships
 from app.graph_db import graph_manager
@@ -13,10 +13,17 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS configuration
+# CORS configuration - Updated for security
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Simplified for MVP
+    allow_origins=[
+        "http://localhost:5173",  # Vite dev server
+        "http://localhost:5174",  # Vite alternative port
+        "http://localhost:3000",  # Alternative dev port
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://127.0.0.1:3000"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -101,3 +108,16 @@ async def get_insights(session_id: str = Query(..., description="The session ID 
         return GraphInsights(**insights)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Insights failed: {str(e)}")
+
+@app.get("/graph-data", response_model=GraphVisualizationData)
+async def get_graph_data(session_id: str = Query(..., description="The session ID to visualize")):
+    """Returns graph data formatted for vis-network visualization.
+    
+    This endpoint provides a secure way to get graph data without exposing
+    Neo4j credentials to the frontend. Returns nodes and edges in vis-network format.
+    """
+    try:
+        graph_data = graph_manager.get_graph_visualization_data(session_id)
+        return GraphVisualizationData(**graph_data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Graph data retrieval failed: {str(e)}")

@@ -25,6 +25,13 @@ const InsightsPanel = ({ insights }) => {
                     <div className="insight-label">Total Relationships</div>
                 </div>
 
+                {insights.avg_confidence && (
+                    <div className="insight-card highlight">
+                        <div className="insight-value">{(insights.avg_confidence * 100).toFixed(0)}%</div>
+                        <div className="insight-label">Avg Confidence</div>
+                    </div>
+                )}
+
                 {insights.most_connected_entity && (
                     <div className="insight-card highlight">
                         <div className="insight-value">{insights.most_connected_entity}</div>
