@@ -34,7 +34,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:5173",
-        "https://knowledge-graph-builder-peach.vercel.app"
+        "https://knowledge-graph-builder-five.vercel.app/"
     ],
     allow_credentials=True,
     allow_methods=["*"],
