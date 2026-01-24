@@ -14,20 +14,33 @@ app = FastAPI(
 )
 
 # CORS configuration - Updated for security
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=[
+#         "http://localhost:5173",  # Vite dev server
+#         "http://localhost:5174",  # Vite alternative port
+#         "http://localhost:3000",  # Alternative dev port
+#         "http://127.0.0.1:5173",
+#         "http://127.0.0.1:5174",
+#         "http://127.0.0.1:3000"
+#     ],
+#     allow_credentials=True,
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",  # Vite dev server
-        "http://localhost:5174",  # Vite alternative port
-        "http://localhost:3000",  # Alternative dev port
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:5174",
-        "http://127.0.0.1:3000"
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "https://knowledge-graph-builder-peach.vercel.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 @app.get("/")
 async def root():
