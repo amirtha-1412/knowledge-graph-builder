@@ -1,13 +1,20 @@
+# import spacy
+# from typing import List, Tuple
+# from app.models import Entity
+
+# # Load SpaCy English model
+# try:
+#     nlp = spacy.load("en_core_web_sm")
+# except OSError:
+#     import en_core_web_sm
+#     nlp = en_core_web_sm.load()
 import spacy
 from typing import List, Tuple
 from app.models import Entity
 
-# Load SpaCy English model
-try:
-    nlp = spacy.load("en_core_web_sm")
-except OSError:
-    import en_core_web_sm
-    nlp = en_core_web_sm.load()
+# Load SpaCy English model (Render-safe)
+nlp = spacy.load("en_core_web_sm")
+
 
 # Increase max_length for large PDF documents (Aura DB & SpaCy support)
 nlp.max_length = 2000000
