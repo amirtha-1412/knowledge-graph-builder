@@ -13,6 +13,19 @@ except OSError:
 # Match the max_length set in nlp_engine.py
 nlp.max_length = 2000000
 
+# Role-based relationship patterns for specific detection
+ROLE_INDICATORS = {
+    "FOUNDED": ["founded", "co-founded", "founder of", "founded by"],
+    "CEO_OF": ["ceo of", "chief executive of", "ceo", "chief executive officer"],
+    "CTO_OF": ["cto of", "chief technology officer"],
+    "CFO_OF": ["cfo of", "chief financial officer"],
+    "PRESIDENT_OF": ["president of"],
+    "DIRECTOR_OF": ["director of"],
+    "EMPLOYED_BY": ["works at", "works for", "employee at", "employed by", "working at"],
+    "ACQUIRED": ["acquired", "acquired by", "bought", "purchased"],
+    "HEADQUARTERED_IN": ["headquartered in", "headquarters in", "based in", "headquartered at"],
+}
+
 # Verb mappings for relationship inference
 VERB_TO_RELATIONSHIP = {
     # Ownership & Control
@@ -22,29 +35,32 @@ VERB_TO_RELATIONSHIP = {
     "control": "CONTROLS",
     "controls": "CONTROLS",
     
-    # Work relationships
-    "work": "WORKS_AT",
-    "works": "WORKS_AT",
+    # Work relationships - More specific
+    "found": "FOUNDED",
+    "founded": "FOUNDED",
+    "co-found": "FOUNDED",
     "employ": "EMPLOYS",
     "employs": "EMPLOYS",
     "hire": "EMPLOYS",
     "hired": "EMPLOYS",
+    "work": "EMPLOYED_BY",
+    "works": "EMPLOYED_BY",
     
     # Location relationships
     "locate": "LOCATED_IN",
     "located": "LOCATED_IN",
-    "base": "LOCATED_IN",
-    "based": "LOCATED_IN",
+    "base": "HEADQUARTERED_IN",
+    "based": "HEADQUARTERED_IN",
     "headquarter": "HEADQUARTERED_IN",
     "headquartered": "HEADQUARTERED_IN",
     
-    # Hierarchical relationships
-    "acquire": "ACQUIRED_BY",
-    "acquired": "ACQUIRED_BY",
-    "buy": "ACQUIRED_BY",
-    "bought": "ACQUIRED_BY",
-    "purchase": "ACQUIRED_BY",
-    "purchased": "ACQUIRED_BY",
+    # Acquisition relationships
+    "acquire": "ACQUIRED",
+    "acquired": "ACQUIRED",
+    "buy": "ACQUIRED",
+    "bought": "ACQUIRED",
+    "purchase": "ACQUIRED",
+    "purchased": "ACQUIRED",
     
     # Production relationships
     "produce": "PRODUCES",
@@ -64,15 +80,13 @@ VERB_TO_RELATIONSHIP = {
     "launch": "LAUNCHED",
     "launched": "LAUNCHED",
     
-    # Temporal relationships
-    "found": "FOUNDED_IN",
-    "founded": "FOUNDED_IN",
-    "establish": "ESTABLISHED_IN",
-    "established": "ESTABLISHED_IN",
-    "occur": "OCCURRED_ON",
-    "occurred": "OCCURRED_ON",
-    "happen": "OCCURRED_ON",
-    "happened": "OCCURRED_ON",
+    # Temporal relationships removed - handled as metadata
+    "establish": "ESTABLISHED",
+    "established": "ESTABLISHED",
+    "occur": "OCCURRED",
+    "occurred": "OCCURRED",
+    "happen": "OCCURRED",
+    "happened": "OCCURRED",
     
     # Collaboration & Competition
     "collaborate": "COLLABORATES_WITH",
@@ -84,6 +98,9 @@ VERB_TO_RELATIONSHIP = {
     "rival": "COMPETES_WITH",
     "rivals": "COMPETES_WITH",
 }
+
+# Minimum confidence threshold for creating relationships
+MIN_CONFIDENCE_THRESHOLD = 0.6
 
 def calculate_confidence(entity1_text: str, entity2_text: str, verb: str, sentence: str) -> float:
     """
@@ -103,14 +120,15 @@ def calculate_confidence(entity1_text: str, entity2_text: str, verb: str, senten
     
     # Check for strong indicators in sentence
     strong_indicators = [
-        "CEO of", "founder of", "president of", "director of",
+        "CEO of", "founder of", "president of", "director of", "CTO of", "CFO of",
         "acquired by", "owned by", "produced by", "developed by",
-        "part of", "subsidiary of", "division of"
+        "part of", "subsidiary of", "division of", "headquartered in",
+        "co-founded", "chief executive"
     ]
     
     for indicator in strong_indicators:
         if indicator.lower() in sentence.lower():
-            confidence += 0.2
+            confidence += 0.3
             break
     
     # Distance penalty (entities far apart = lower confidence)
@@ -127,15 +145,45 @@ def calculate_confidence(entity1_text: str, entity2_text: str, verb: str, senten
     # Ensure confidence is between 0 and 1
     return max(0.0, min(1.0, confidence))
 
-def extract_svo_relationships(text: str) -> List[Relationship]:
+def detect_role_relationship(sentence: str, person: str, org: str) -> Tuple[str, float]:
+    """
+    Detect specific role-based relationships between a person and organization.
+    
+    Returns:
+        relationship_type: Specific role (FOUNDED, CEO_OF, EMPLOYED_BY, etc.)
+        confidence: Confidence score
+    """
+    sent_lower = sentence.lower()
+    
+    for rel_type, indicators in ROLE_INDICATORS.items():
+        for indicator in indicators:
+            if indicator in sent_lower:
+                # Verify the indicator is near both entities
+                person_pos = sent_lower.find(person.lower())
+                org_pos = sent_lower.find(org.lower())
+                indicator_pos = sent_lower.find(indicator)
+                
+                if person_pos != -1 and org_pos != -1 and indicator_pos != -1:
+                    # Check if indicator is between entities or near them
+                    max_distance = max(abs(indicator_pos - person_pos), abs(indicator_pos - org_pos))
+                    if max_distance < 80:  # Within 80 characters
+                        return rel_type, 0.95
+    
+    # Fallback to generic EMPLOYED_BY with lower confidence
+    return "EMPLOYED_BY", 0.5
+
+def extract_svo_relationships(text: str, metadata: dict = None, document_id: str = None) -> List[Relationship]:
     """
     Extract relationships using Subject-Verb-Object (SVO) parsing.
     Uses SpaCy dependency parsing to find (nsubj, ROOT, dobj/pobj) patterns.
+    NO LONGER USES RELATED_TO FALLBACK - only creates relationships when confident.
     """
     doc = extract_dependency_tree(text)
     relationships = []
     
     for sent in doc.sents:
+        sent_text = sent.text
+        
         # Find verb roots in the sentence
         for token in sent:
             if token.pos_ == "VERB" and token.dep_ == "ROOT":
@@ -164,135 +212,176 @@ def extract_svo_relationships(text: str) -> List[Relationship]:
                         obj_text = " ".join([child.text for child in obj.subtree])
                         
                         # Check if verb maps to a known relationship type
-                        rel_type = VERB_TO_RELATIONSHIP.get(verb, "RELATED_TO")
+                        rel_type = VERB_TO_RELATIONSHIP.get(verb, None)  # ← NO RELATED_TO FALLBACK
+                        
+                        # Skip if no known relationship type
+                        if rel_type is None:
+                            continue
                         
                         confidence = calculate_confidence(
-                            subj_text, obj_text, verb, sent.text
+                            subj_text, obj_text, verb, sent_text
                         )
+                        
+                        # Apply confidence threshold
+                        if confidence < MIN_CONFIDENCE_THRESHOLD:
+                            continue
+                        
+                        # Attach metadata if available
+                        rel_metadata = {}
+                        if metadata:
+                            # Find date and money in the same sentence
+                            for date_text, date_sent in metadata.get('dates', []):
+                                if date_sent == sent_text:
+                                    rel_metadata['date'] = date_text
+                                    break
+                            
+                            for money_text, money_sent in metadata.get('money', []):
+                                if money_sent == sent_text:
+                                    rel_metadata['amount'] = money_text
+                                    break
                         
                         relationships.append(Relationship(
                             source=subj_text,
                             target=obj_text,
                             type=rel_type,
-                            reason=f"SVO pattern: '{subj_text}' {verb} '{obj_text}' (sentence: {sent.text[:100]}...)",
+                            reason=f"SVO pattern: '{subj_text}' {verb} '{obj_text}'",
                             confidence=confidence,
-                            verb=verb
+                            verb=verb,
+                            source_sentence=sent_text,
+                            document_id=document_id,
+                            metadata=rel_metadata if rel_metadata else None
                         ))
     
     return relationships
 
-def infer_relationships(text: str) -> List[Relationship]:
+def infer_relationships(text: str, metadata: dict = None, document_id: str = None) -> List[Relationship]:
     """
     Infers relationships between entities using enhanced rule-based logic and SVO extraction.
+    UPDATED: Uses role-based detection, removes RELATED_TO, applies confidence thresholds.
     
     Combines:
-    1. Rule-based co-occurrence patterns
+    1. Role-based relationship detection (FOUNDED, CEO_OF, EMPLOYED_BY)
     2. SVO (Subject-Verb-Object) dependency parsing
-    3. Temporal relationships (DATE entities)
-    4. Hierarchical relationships
+    3. Metadata enrichment (attach DATE, MONEY to relationships, not as nodes)
+    4. Confidence-based filtering
     """
     cleaned_text = clean_text(text)
     doc = nlp(cleaned_text)
     relationships = []
     
-    # Strategy 1: Sentence-level co-occurrence rules
+    # Strategy 1: Sentence-level co-occurrence with role detection
     for sent in doc.sents:
         entities = [(ent.text, ent.label_) for ent in sent.ents]
         
-        # Identify entity types
+        # Identify STRUCTURAL entity types only (no DATE, MONEY, etc.)
         persons = [e[0] for e in entities if e[1] == "PERSON"]
         orgs = [e[0] for e in entities if e[1] == "ORG"]
         gpes = [e[0] for e in entities if e[1] == "GPE"]
-        dates = [e[0] for e in entities if e[1] == "DATE"]
         products = [e[0] for e in entities if e[1] == "PRODUCT"]
         events = [e[0] for e in entities if e[1] == "EVENT"]
-        money = [e[0] for e in entities if e[1] == "MONEY"]
         
-        sent_lower = sent.text.lower()
+        sent_text = sent.text
+        sent_lower = sent_text.lower()
         
-        # Rule 1: WORKS_AT (PERSON + ORG)
+        # Metadata extraction from sentence
+        sent_metadata = {}
+        if metadata:
+            for date_text, date_sent in metadata.get('dates', []):
+                if date_sent == sent_text:
+                    sent_metadata['date'] = date_text
+                    break
+            for money_text, money_sent in metadata.get('money', []):
+                if money_sent == sent_text:
+                    sent_metadata['amount'] = money_text
+                    break
+        
+        # Rule 1: ROLE-BASED RELATIONSHIPS (PERSON + ORG)
         for person in persons:
             for org in orgs:
-                confidence = 0.7
-                # Check for role indicators
-                if any(indicator in sent_lower for indicator in ["ceo", "founder", "president", "director", "employee"]):
-                    confidence = 0.95
+                # Detect specific role
+                rel_type, confidence = detect_role_relationship(sent_text, person, org)
+                
+                # Apply confidence threshold
+                if confidence < MIN_CONFIDENCE_THRESHOLD:
+                    continue
                 
                 relationships.append(Relationship(
                     source=person,
                     target=org,
-                    type="WORKS_AT",
-                    reason=f"PERSON ({person}) and ORG ({org}) detected in the same sentence with work context.",
-                    confidence=confidence
+                    type=rel_type,
+                    reason=f"Role-based detection: {person} → {rel_type} → {org}",
+                    confidence=confidence,
+                    source_sentence=sent_text,
+                    document_id=document_id,
+                    metadata=sent_metadata if sent_metadata else None
                 ))
         
-        # Rule 2: LOCATED_IN (ORG + GPE)
+        # Rule 2: HEADQUARTERED_IN (ORG + GPE)
         for org in orgs:
             for gpe in gpes:
-                confidence = 0.7
-                if any(word in sent_lower for word in ["based in", "located in", "headquartered"]):
-                    confidence = 0.9
+                # Check for specific headquarters indicators
+                if any(word in sent_lower for word in ["headquartered", "headquarters in", "headquartered in"]):
+                    rel_type = "HEADQUARTERED_IN"
+                    confidence = 0.95
+                elif any(word in sent_lower for word in ["based in", "located in"]):
+                    rel_type = "LOCATED_IN"
+                    confidence = 0.85
+                else:
+                    rel_type = "LOCATED_IN"
+                    confidence = 0.65
+                
+                # Apply confidence threshold
+                if confidence < MIN_CONFIDENCE_THRESHOLD:
+                    continue
                 
                 relationships.append(Relationship(
                     source=org,
                     target=gpe,
-                    type="LOCATED_IN",
-                    reason=f"ORG ({org}) and GPE ({gpe}) detected in the same sentence.",
-                    confidence=confidence
+                    type=rel_type,
+                    reason=f"Location detection: {org} → {rel_type} → {gpe}",
+                    confidence=confidence,
+                    source_sentence=sent_text,
+                    document_id=document_id
                 ))
         
-        # Rule 3: FOUNDED_IN (ORG + DATE)
-        for org in orgs:
-            for date in dates:
-                if any(word in sent_lower for word in ["founded", "established", "created", "started"]):
-                    relationships.append(Relationship(
-                        source=org,
-                        target=date,
-                        type="FOUNDED_IN",
-                        reason=f"ORG ({org}) and DATE ({date}) with founding context.",
-                        confidence=0.85
-                    ))
+        # REMOVED: FOUNDED_IN, OCCURRED_ON - Dates are now metadata, not nodes
+        # These temporal facts are now attached to FOUNDED/ESTABLISHED relationships as metadata
         
-        # Rule 4: OCCURRED_ON (EVENT + DATE)
-        for event in events:
-            for date in dates:
-                relationships.append(Relationship(
-                    source=event,
-                    target=date,
-                    type="OCCURRED_ON",
-                    reason=f"EVENT ({event}) and DATE ({date}) detected together.",
-                    confidence=0.8
-                ))
-        
-        # Rule 5: PRODUCES (ORG + PRODUCT)
+        # Rule 3: PRODUCES (ORG + PRODUCT)
         for org in orgs:
             for product in products:
-                confidence = 0.7
-                if any(word in sent_lower for word in ["released", "launched", "produced", "developed", "created"]):
+                if any(word in sent_lower for word in ["released", "launched"]):
+                    rel_type = "RELEASED"
                     confidence = 0.9
+                elif any(word in sent_lower for word in ["produced", "manufactures"]):
+                    rel_type = "PRODUCES"
+                    confidence = 0.9
+                elif any(word in sent_lower for word in ["developed", "created"]):
+                    rel_type = "DEVELOPS"
+                    confidence = 0.85
+                else:
+                    rel_type = "PRODUCES"
+                    confidence = 0.65
+                
+                # Apply confidence threshold
+                if confidence < MIN_CONFIDENCE_THRESHOLD:
+                    continue
                 
                 relationships.append(Relationship(
                     source=org,
                     target=product,
-                    type="PRODUCES",
-                    reason=f"ORG ({org}) and PRODUCT ({product}) with production context.",
-                    confidence=confidence
+                    type=rel_type,
+                    reason=f"Production detection: {org} → {rel_type} → {product}",
+                    confidence=confidence,
+                    source_sentence=sent_text,
+                    document_id=document_id,
+                    metadata=sent_metadata if sent_metadata else None
                 ))
         
-        # Rule 6: PRICED_AT (PRODUCT + MONEY)
-        for product in products:
-            for money_val in money:
-                if any(word in sent_lower for word in ["cost", "price", "priced", "for"]):
-                    relationships.append(Relationship(
-                        source=product,
-                        target=money_val,
-                        type="PRICED_AT",
-                        reason=f"PRODUCT ({product}) and MONEY ({money_val}) with pricing context.",
-                        confidence=0.85
-                    ))
+        # REMOVED: PRICED_AT - Money values are now metadata attached to RELEASED/PRODUCES relationships
     
     # Strategy 2: SVO-based extraction for semantic relationships
-    svo_relationships = extract_svo_relationships(text)
+    svo_relationships = extract_svo_relationships(text, metadata, document_id)
     relationships.extend(svo_relationships)
     
     # Deduplicate relationships

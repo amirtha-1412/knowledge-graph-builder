@@ -53,19 +53,25 @@ async def build_graph(request: GraphBuildRequest):
         raise HTTPException(status_code=400, detail="Text cannot be empty")
     
     session_id = request.session_id or f"sess-{uuid.uuid4().hex[:8]}"
+    document_id = f"doc-{uuid.uuid4().hex[:8]}"
     
     try:
         # 1. NLP Processing
-        entities = extract_entities(request.text)
-        relationships = infer_relationships(request.text)
+        entities, metadata = extract_entities(request.text, document_id=document_id)
+        relationships = infer_relationships(request.text, metadata=metadata, document_id=document_id)
         
-        # 2. Persistence
-        graph_manager.save_graph_data(session_id, entities, relationships)
+        # 2. Event Extraction
+        from app.event_extraction import extract_events
+        events = extract_events(request.text, entities, metadata, document_id=document_id)
+        
+        # 3. Persistence
+        graph_manager.save_graph_data(session_id, entities, relationships, events)
         
         return GraphBuildResponse(
             session_id=session_id,
             entities=entities,
             relationships=relationships,
+            events=events,
             message="Graph successfully built and persisted."
         )
     except Exception as e:
