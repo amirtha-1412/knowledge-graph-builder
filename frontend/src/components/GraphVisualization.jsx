@@ -88,9 +88,6 @@ const GraphVisualization = ({ sessionId }) => {
                             forceDirection: layoutType === 'hierarchical' ? 'vertical' : 'none',
                             roundness: 0.5
                         },
-                        color: {
-                            inherit: false
-                        },
                         chosen: {
                             edge: (values) => {
                                 values.width = 5;
