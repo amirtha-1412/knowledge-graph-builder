@@ -597,9 +597,6 @@ python -m spacy download en_core_web_sm
 - **Database:** Neo4j constraints ensure data integrity
 - **Caching:** Session-based caching for improved performance
 
-## License
-
-MIT License - See LICENSE file for details
 
 ## Contributing
 
