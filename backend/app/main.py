@@ -34,7 +34,10 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:5173",
+<<<<<<< HEAD
         "http://localhost:5174",  # Alternative Vite port
+=======
+>>>>>>> c23da0d17c4c7f3d5918d76f95583c692a663725
         "https://knowledge-graph-builder-peach.vercel.app",
         "https://knowledge-graph-builder-five.vercel.app"
     ],
