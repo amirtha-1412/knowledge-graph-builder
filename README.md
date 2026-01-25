@@ -29,6 +29,284 @@ The system consists of three main components:
 - Relationship traversal
 - Data persistence
 
+## 📊 System Flow Diagrams
+
+### High-Level Architecture
+
+```mermaid
+graph TB
+    subgraph "Frontend Layer"
+        UI[React UI<br/>Vite + React 18]
+        Input[Input Panel<br/>Text/PDF Upload]
+        Viz[Graph Visualization<br/>vis-network]
+        Insights[Insights Panel<br/>Statistics]
+    end
+    
+    subgraph "Backend Layer"
+        API[FastAPI Server<br/>REST API]
+        NLP[NLP Engine<br/>SpaCy]
+        REL[Relationship Logic<br/>Pattern Matching]
+        EVENT[Event Extraction<br/>Temporal Detection]
+        VALID[Semantic Validator<br/>Type Checking]
+    end
+    
+    subgraph "Database Layer"
+        NEO[(Neo4j Graph DB<br/>Nodes & Edges)]
+    end
+    
+    UI --> Input
+    UI --> Viz
+    UI --> Insights
+    
+    Input -->|HTTP POST| API
+    API --> NLP
+    NLP --> REL
+    REL --> EVENT
+    EVENT --> VALID
+    VALID --> NEO
+    
+    NEO -->|Graph Data| API
+    API -->|JSON Response| Viz
+    API -->|Statistics| Insights
+    
+    style UI fill:#3b82f6,color:#fff
+    style API fill:#10b981,color:#fff
+    style NEO fill:#f59e0b,color:#fff
+```
+
+### Complete Data Flow Pipeline
+
+```mermaid
+flowchart TD
+    Start([User Input]) --> InputType{Input Type?}
+    
+    InputType -->|Text| TextInput[Text Input]
+    InputType -->|PDF| PDFInput[PDF Upload]
+    
+    PDFInput --> PDFExtract[PyPDF2 Extraction]
+    PDFExtract --> TextInput
+    
+    TextInput --> SessionID[Generate/Use Session ID]
+    SessionID --> DocID[Generate Document ID]
+    
+    DocID --> NLPStart[NLP Processing Start]
+    
+    subgraph "NLP Processing Pipeline"
+        NLPStart --> SpaCy[SpaCy NER<br/>en_core_web_sm]
+        SpaCy --> EntityExtract[Extract Entities<br/>PERSON, ORG, GPE, etc.]
+        EntityExtract --> EntityNorm[Entity Normalization<br/>Remove Inc., LLC]
+        EntityNorm --> EntityCat[Entity Categorization<br/>Structural vs Metadata]
+        EntityCat --> MetaSep[Separate Metadata<br/>DATE, MONEY, PERCENT]
+    end
+    
+    MetaSep --> RelStart[Relationship Inference Start]
+    
+    subgraph "Relationship Extraction"
+        RelStart --> RoleDetect[Role-Based Detection<br/>CEO_OF, FOUNDED]
+        RoleDetect --> LocDetect[Location Patterns<br/>HEADQUARTERED_IN]
+        LocDetect --> ProdDetect[Product Patterns<br/>PRODUCES, RELEASED]
+        ProdDetect --> SVOParse[SVO Dependency Parsing<br/>Subject-Verb-Object]
+        SVOParse --> ConfScore[Confidence Scoring<br/>0.6 - 1.0]
+    end
+    
+    ConfScore --> EventStart[Event Detection Start]
+    
+    subgraph "Event Extraction"
+        EventStart --> AcqDetect[Acquisition Detection]
+        AcqDetect --> LaunchDetect[Product Launch Detection]
+        LaunchDetect --> LeaderDetect[Leadership Change Detection]
+        LeaderDetect --> EventLink[Link Events to Entities]
+    end
+    
+    EventLink --> Validate[Semantic Validation]
+    
+    subgraph "Validation Layer"
+        Validate --> TypeCheck[Type Constraint Check<br/>PERSON → COMPANY valid?]
+        TypeCheck --> ConfFilter[Confidence Filter<br/>threshold ≥ 0.6]
+        ConfFilter --> DedupCheck[Deduplication Check]
+    end
+    
+    DedupCheck --> Neo4jSave[Save to Neo4j]
+    
+    subgraph "Neo4j Storage"
+        Neo4jSave --> CreateNodes[Create Entity Nodes]
+        CreateNodes --> CreateEdges[Create Relationship Edges]
+        CreateEdges --> AttachMeta[Attach Metadata Properties<br/>date, amount, source]
+    end
+    
+    AttachMeta --> Response[Build API Response]
+    Response --> FrontendUpdate[Update Frontend State]
+    
+    FrontendUpdate --> VizRequest[Request Graph Data]
+    VizRequest --> Neo4jQuery[Query Neo4j for Visualization]
+    Neo4jQuery --> FormatData[Format for vis-network<br/>nodes & edges]
+    FormatData --> Render[Render Interactive Graph]
+    
+    Render --> End([User Views Graph])
+    
+    style Start fill:#3b82f6,color:#fff
+    style End fill:#10b981,color:#fff
+    style Neo4jSave fill:#f59e0b,color:#fff
+    style Validate fill:#ef4444,color:#fff
+```
+
+### API Request-Response Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant React as React Frontend
+    participant API as FastAPI Backend
+    participant SpaCy as SpaCy NLP
+    participant Neo4j as Neo4j Database
+    
+    User->>React: Enter text / Upload PDF
+    React->>React: Set loading state
+    
+    React->>API: POST /build<br/>{text, session_id}
+    
+    API->>API: Generate session_id & document_id
+    
+    API->>SpaCy: extract_entities(text)
+    SpaCy->>SpaCy: NER Processing
+    SpaCy->>SpaCy: Entity Normalization
+    SpaCy->>SpaCy: Metadata Separation
+    SpaCy-->>API: entities[], metadata{}
+    
+    API->>API: infer_relationships(text, metadata)
+    API->>API: Role-based detection
+    API->>API: SVO parsing
+    API->>API: Confidence scoring
+    API-->>API: relationships[]
+    
+    API->>API: extract_events(text, entities)
+    API->>API: Pattern matching
+    API-->>API: events[]
+    
+    API->>API: Semantic validation
+    API->>API: Type checking
+    API->>API: Confidence filtering
+    
+    API->>Neo4j: save_graph_data(entities, relationships, events)
+    Neo4j->>Neo4j: MERGE entities as nodes
+    Neo4j->>Neo4j: MERGE relationships as edges
+    Neo4j->>Neo4j: MERGE events with links
+    Neo4j-->>API: Success
+    
+    API-->>React: {session_id, entities, relationships, events, message}
+    
+    React->>React: Update state
+    React->>API: GET /graph-data?session_id=xxx
+    
+    API->>Neo4j: Query graph visualization data
+    Neo4j->>Neo4j: MATCH (n)-[r]->(m)
+    Neo4j-->>API: {nodes, edges}
+    
+    API-->>React: {nodes: [...], edges: [...]}
+    
+    React->>React: Render vis-network graph
+    React->>User: Display interactive graph
+    
+    User->>React: Request insights
+    React->>API: GET /insights?session_id=xxx
+    
+    API->>Neo4j: Query statistics
+    Neo4j-->>API: {total_entities, total_relationships, entity_types}
+    
+    API-->>React: Insights data
+    React->>User: Display statistics
+```
+
+### NLP Processing Detail
+
+```mermaid
+flowchart LR
+    subgraph "Input"
+        Text[Raw Text<br/>Apple acquired Beats for $3B in 2014]
+    end
+    
+    subgraph "SpaCy NER"
+        NER[Named Entity Recognition]
+        Text --> NER
+        NER --> E1[Apple - ORG]
+        NER --> E2[Beats - ORG]
+        NER --> E3[$3B - MONEY]
+        NER --> E4[2014 - DATE]
+    end
+    
+    subgraph "Entity Processing"
+        E1 --> Norm1[Normalize: Apple]
+        E2 --> Norm2[Normalize: Beats]
+        E3 --> Meta1[Metadata: amount]
+        E4 --> Meta2[Metadata: date]
+        
+        Norm1 --> Cat1[Structural Entity]
+        Norm2 --> Cat2[Structural Entity]
+    end
+    
+    subgraph "Relationship Inference"
+        Cat1 --> Pattern[Pattern Match: acquired]
+        Cat2 --> Pattern
+        Pattern --> Rel[Apple -ACQUIRED-> Beats]
+        Meta1 --> Rel
+        Meta2 --> Rel
+    end
+    
+    subgraph "Event Detection"
+        Pattern --> Event[Acquisition Event]
+        Event --> EventProps[name: Apple acquires Beats<br/>type: Acquisition<br/>participants: Apple, Beats<br/>amount: $3B<br/>date: 2014]
+    end
+    
+    subgraph "Output"
+        Cat1 --> Out1[Entity: Apple ORG]
+        Cat2 --> Out2[Entity: Beats ORG]
+        Rel --> Out3[Relationship: ACQUIRED<br/>metadata: amount=$3B, date=2014]
+        EventProps --> Out4[Event Node with INVOLVES edges]
+    end
+    
+    style Text fill:#3b82f6,color:#fff
+    style Out1 fill:#10b981,color:#fff
+    style Out2 fill:#10b981,color:#fff
+    style Out3 fill:#f59e0b,color:#fff
+    style Out4 fill:#8b5cf6,color:#fff
+```
+
+### Neo4j Graph Structure
+
+```mermaid
+graph TB
+    subgraph "Entity Nodes"
+        P1((Person<br/>Tim Cook))
+        C1((Company<br/>Apple))
+        C2((Company<br/>Beats))
+        PR1((Product<br/>iPhone))
+        L1((Location<br/>Cupertino))
+    end
+    
+    subgraph "Event Nodes"
+        E1{Acquisition<br/>Apple acquires Beats<br/>$3B, 2014}
+        E2{Product Launch<br/>iPhone Release<br/>2007}
+    end
+    
+    P1 -->|CEO_OF<br/>confidence: 0.95| C1
+    C1 -->|ACQUIRED<br/>amount: $3B<br/>date: 2014| C2
+    C1 -->|RELEASED<br/>date: 2007| PR1
+    C1 -->|HEADQUARTERED_IN| L1
+    
+    E1 -.->|INVOLVES| C1
+    E1 -.->|INVOLVES| C2
+    E2 -.->|INVOLVES| C1
+    E2 -.->|INVOLVES| PR1
+    
+    style P1 fill:#3b82f6,color:#fff
+    style C1 fill:#10b981,color:#fff
+    style C2 fill:#10b981,color:#fff
+    style PR1 fill:#8b5cf6,color:#fff
+    style L1 fill:#f59e0b,color:#fff
+    style E1 fill:#fbbf24,color:#000
+    style E2 fill:#ec4899,color:#fff
+```
+
 ## System Workflow
 
 ### 1. Text Input
