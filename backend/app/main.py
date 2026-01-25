@@ -14,20 +14,35 @@ app = FastAPI(
 )
 
 # CORS configuration - Updated for security
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=[
+#         "http://localhost:5173",  # Vite dev server
+#         "http://localhost:5174",  # Vite alternative port
+#         "http://localhost:3000",  # Alternative dev port
+#         "http://127.0.0.1:5173",
+#         "http://127.0.0.1:5174",
+#         "http://127.0.0.1:3000"
+#     ],
+#     allow_credentials=True,
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",  # Vite dev server
-        "http://localhost:5174",  # Vite alternative port
-        "http://localhost:3000",  # Alternative dev port
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:5174",
-        "http://127.0.0.1:3000"
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:5174",  # Alternative Vite port
+        "https://knowledge-graph-builder-peach.vercel.app",
+        "https://knowledge-graph-builder-five.vercel.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 @app.get("/")
 async def root():
@@ -48,7 +63,7 @@ async def health_check():
 
 @app.post("/build", response_model=GraphBuildResponse)
 async def build_graph(request: GraphBuildRequest):
-    """Processes text to build a knowledge graph."""
+    """Processes text to build a knowledge graph with strict semantic validation."""
     if not request.text.strip():
         raise HTTPException(status_code=400, detail="Text cannot be empty")
     
@@ -56,7 +71,7 @@ async def build_graph(request: GraphBuildRequest):
     document_id = f"doc-{uuid.uuid4().hex[:8]}"
     
     try:
-        # 1. NLP Processing
+        # 1. NLP Processing with validation
         entities, metadata = extract_entities(request.text, document_id=document_id)
         relationships = infer_relationships(request.text, metadata=metadata, document_id=document_id)
         
@@ -67,12 +82,18 @@ async def build_graph(request: GraphBuildRequest):
         # 3. Persistence
         graph_manager.save_graph_data(session_id, entities, relationships, events)
         
+        # 4. Log validation statistics
+        print(f"[Graph Build] Session: {session_id}")
+        print(f"  ✓ Entities: {len(entities)}")
+        print(f"  ✓ Relationships: {len(relationships)}")
+        print(f"  ✓ Events: {len(events)}")
+        
         return GraphBuildResponse(
             session_id=session_id,
             entities=entities,
             relationships=relationships,
             events=events,
-            message="Graph successfully built and persisted."
+            message=f"Graph built: {len(entities)} entities, {len(relationships)} relationships validated."
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Graph building failed: {str(e)}")

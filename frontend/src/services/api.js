@@ -1,4 +1,8 @@
+// For local development
 const API_BASE_URL = 'http://localhost:8000';
+
+// For deployed backend (uncomment to use)
+// const API_BASE_URL = 'https://knowledge-graph-builder-ct24.onrender.com';
 
 export const api = {
   buildGraph: async (text, sessionId = null) => {
@@ -18,7 +22,7 @@ export const api = {
     if (sessionId) {
       formData.append('session_id', sessionId);
     }
-    
+
     const response = await fetch(`${API_BASE_URL}/upload`, {
       method: 'POST',
       body: formData,

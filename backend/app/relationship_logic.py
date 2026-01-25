@@ -16,7 +16,8 @@ nlp.max_length = 2000000
 # Role-based relationship patterns for specific detection
 ROLE_INDICATORS = {
     "FOUNDED": ["founded", "co-founded", "founder of", "founded by"],
-    "CEO_OF": ["ceo of", "chief executive of", "ceo", "chief executive officer"],
+    "CEO_OF": ["ceo of", "chief executive of", "ceo", "chief executive officer", "current ceo"],
+    "FORMER_CEO_OF": ["former ceo", "ex-ceo", "previously ceo", "was ceo", "former chief executive"],
     "CTO_OF": ["cto of", "chief technology officer"],
     "CFO_OF": ["cfo of", "chief financial officer"],
     "PRESIDENT_OF": ["president of"],
@@ -258,12 +259,14 @@ def infer_relationships(text: str, metadata: dict = None, document_id: str = Non
     """
     Infers relationships between entities using enhanced rule-based logic and SVO extraction.
     UPDATED: Uses role-based detection, removes RELATED_TO, applies confidence thresholds.
+    Applies semantic validation to ensure only valid relationship triples are created.
     
     Combines:
     1. Role-based relationship detection (FOUNDED, CEO_OF, EMPLOYED_BY)
     2. SVO (Subject-Verb-Object) dependency parsing
     3. Metadata enrichment (attach DATE, MONEY to relationships, not as nodes)
     4. Confidence-based filtering
+    5. Semantic validation (NEW)
     """
     cleaned_text = clean_text(text)
     doc = nlp(cleaned_text)
@@ -273,12 +276,19 @@ def infer_relationships(text: str, metadata: dict = None, document_id: str = Non
     for sent in doc.sents:
         entities = [(ent.text, ent.label_) for ent in sent.ents]
         
+        # Apply entity type corrections at sentence level too
+        from app.nlp_engine import correct_entity_type
+        corrected_entities = []
+        for ent_text, ent_label in entities:
+            corrected_type = correct_entity_type(ent_text, ent_label)
+            corrected_entities.append((ent_text, corrected_type))
+        
         # Identify STRUCTURAL entity types only (no DATE, MONEY, etc.)
-        persons = [e[0] for e in entities if e[1] == "PERSON"]
-        orgs = [e[0] for e in entities if e[1] == "ORG"]
-        gpes = [e[0] for e in entities if e[1] == "GPE"]
-        products = [e[0] for e in entities if e[1] == "PRODUCT"]
-        events = [e[0] for e in entities if e[1] == "EVENT"]
+        persons = [e[0] for e in corrected_entities if e[1] == "PERSON"]
+        orgs = [e[0] for e in corrected_entities if e[1] == "ORG"]
+        gpes = [e[0] for e in corrected_entities if e[1] == "GPE"]
+        products = [e[0] for e in corrected_entities if e[1] == "PRODUCT"]
+        events = [e[0] for e in corrected_entities if e[1] == "EVENT"]
         
         sent_text = sent.text
         sent_lower = sent_text.lower()
@@ -379,6 +389,41 @@ def infer_relationships(text: str, metadata: dict = None, document_id: str = Non
                 ))
         
         # REMOVED: PRICED_AT - Money values are now metadata attached to RELEASED/PRODUCES relationships
+        
+        # Rule 4: PRODUCES with list patterns ("such as", "like", "including")
+        # Handle: "Amazon produces devices such as Kindle, Echo, and Fire TV"
+        for org in orgs:
+            if any(pattern in sent_lower for pattern in ["such as", "including", "like"]):
+                # If we have products in this sentence, create PRODUCES relationships
+                for product in products:
+                    relationships.append(Relationship(
+                        source=org,
+                        target=product,
+                        type="PRODUCES",
+                        reason=f"List-based production: {org} → PRODUCES → {product}",
+                        confidence=0.85,
+                        source_sentence=sent_text,
+                        document_id=document_id,
+                        metadata=sent_metadata if sent_metadata else None
+                    ))
+        
+        # Rule 5: COMPETES_WITH with list patterns
+        # Handle: "Amazon competes with companies like Microsoft, Google, and Alibaba"
+        if any(pattern in sent_lower for pattern in ["competes with", "competitors like", "rivals like", "competing with"]):
+            # Find all companies in this sentence
+            if len(orgs) >= 2:
+                # First org competes with all other orgs in sentence
+                primary_org = orgs[0]
+                for other_org in orgs[1:]:
+                    relationships.append(Relationship(
+                        source=primary_org,
+                        target=other_org,
+                        type="COMPETES_WITH",
+                        reason=f"Competition detection: {primary_org} ← → COMPETES_WITH → {other_org}",
+                        confidence=0.85,
+                        source_sentence=sent_text,
+                        document_id=document_id
+                    ))
     
     # Strategy 2: SVO-based extraction for semantic relationships
     svo_relationships = extract_svo_relationships(text, metadata, document_id)
@@ -394,7 +439,23 @@ def infer_relationships(text: str, metadata: dict = None, document_id: str = Non
             seen.add(key)
             unique_relationships.append(rel)
     
-    return unique_relationships
+    # Apply semantic validation (NEW)
+    # Extract entities from text for validation context
+    from app.nlp_engine import extract_entities
+    from app.semantic_validator import SemanticValidator
+    
+    entities, _ = extract_entities(text, document_id)
+    
+    # Debug logging
+    print(f"[Relationship Extraction] Total relationships before validation: {len(unique_relationships)}")
+    for r in unique_relationships:
+        print(f"  - {r.source} -[{r.type}]-> {r.target} (confidence: {r.confidence})")
+    
+    validated_relationships = SemanticValidator.filter_relationships(unique_relationships, entities)
+    
+    print(f"[Relationship Extraction] Total relationships after validation: {len(validated_relationships)}")
+    
+    return validated_relationships
 
 if __name__ == "__main__":
     sample_text = """

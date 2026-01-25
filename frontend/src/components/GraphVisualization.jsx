@@ -81,8 +81,7 @@ const GraphVisualization = ({ sessionId }) => {
                             align: 'horizontal',
                             background: 'rgba(255, 255, 255, 0.95)',
                             strokeWidth: 3,
-                            strokeColor: '#fff',
-                            bold: true
+                            strokeColor: '#fff'
                         },
                         smooth: {
                             type: 'cubicBezier',

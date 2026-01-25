@@ -1,13 +1,20 @@
+# import spacy
+# from typing import List, Tuple
+# from app.models import Entity
+
+# # Load SpaCy English model
+# try:
+#     nlp = spacy.load("en_core_web_sm")
+# except OSError:
+#     import en_core_web_sm
+#     nlp = en_core_web_sm.load()
 import spacy
 from typing import List, Tuple
 from app.models import Entity
 
-# Load SpaCy English model
-try:
-    nlp = spacy.load("en_core_web_sm")
-except OSError:
-    import en_core_web_sm
-    nlp = en_core_web_sm.load()
+# Load SpaCy English model (Render-safe)
+nlp = spacy.load("en_core_web_sm")
+
 
 # Increase max_length for large PDF documents (Aura DB & SpaCy support)
 nlp.max_length = 2000000
@@ -21,17 +28,14 @@ def clean_text(text: str) -> str:
 
 def normalize_entity_name(text: str, entity_type: str) -> str:
     """
-    Normalize entity names for deduplication.
-    
-    Examples:
-    - "Apple Inc." -> "Apple"
-    - "U.S." -> "United States"
+    Normalize entity names for consistency.
+    Removes common corporate suffixes and standardizes formatting.
     """
     normalized = text.strip()
     
     # Remove common suffixes for organizations
-    if entity_type == "ORG":
-        suffixes = [" Inc.", " Inc", " LLC", " Corp.", " Corporation", " Ltd.", " Co.", " Company"]
+    if entity_type in ["ORG", "GPE"]:
+        suffixes = [" Inc.", " Inc", " LLC", " Corp.", " Corporation", " Ltd.", " Limited", " Co."]
         for suffix in suffixes:
             if normalized.endswith(suffix):
                 normalized = normalized[:-len(suffix)].strip()
@@ -47,6 +51,54 @@ def normalize_entity_name(text: str, entity_type: str) -> str:
             normalized = abbreviations[normalized]
     
     return normalized
+
+def correct_entity_type(text: str, spacy_type: str) -> str:
+    """
+    Correct common SpaCy entity type misclassifications.
+    
+    Some well-known companies are misclassified as GPE (locations).
+    Some well-known products are misclassified as ORG or GPE.
+    This function corrects known cases.
+    
+    Examples:
+    - "Alibaba" detected as GPE → corrected to ORG
+    - "Amazon" detected as GPE → corrected to ORG
+    - "Kindle" detected as GPE → corrected to PRODUCT
+    - "iPhone" detected as ORG → corrected to PRODUCT
+    """
+    # Known companies that SpaCy might misclassify as GPE
+    known_companies = {
+        "alibaba", "amazon", "google", "microsoft", "apple", "facebook", "meta",
+        "tesla", "spacex", "twitter", "x", "netflix", "uber", "airbnb",
+        "samsung", "sony", "intel", "amd", "nvidia", "oracle", "ibm",
+        "tencent", "baidu", "salesforce", "cisco", "huawei", "xiaomi"
+    }
+    
+    # Known products that SpaCy might misclassify as ORG or GPE
+    known_products = {
+        # Amazon products
+        "kindle", "echo", "fire tv", "fire stick", "alexa", "prime",
+        # Apple products
+        "iphone", "ipad", "macbook", "airpods", "apple watch", "imac", "mac",
+        # Microsoft products
+        "windows", "xbox", "surface", "office", "azure",
+        # Google products
+        "android", "chrome", "gmail", "google maps", "pixel",
+        # Other tech products
+        "playstation", "ps5", "nintendo switch", "tesla model s", "tesla model 3"
+    }
+    
+    normalized_text = text.lower().strip()
+    
+    # Check for known products first (higher priority)
+    if normalized_text in known_products:
+        return "PRODUCT"
+    
+    # If SpaCy thinks it's a location but it's a known company, correct it
+    if spacy_type == "GPE" and normalized_text in known_companies:
+        return "ORG"
+    
+    return spacy_type
 
 def extract_metadata(doc, document_id: str = None) -> dict:
     """
@@ -85,6 +137,7 @@ def extract_entities(text: str, document_id: str = None) -> Tuple[List[Entity], 
     """
     Processes raw text to extract STRUCTURAL entities only.
     Metadata (DATE, MONEY, PERCENT, etc.) is extracted separately for relationship enrichment.
+    Applies strict filtering to only allowed entity types.
     
     Returns:
         entities: List of structural entities (PERSON, ORG, GPE, PRODUCT, EVENT, FAC, WORK_OF_ART)
@@ -112,11 +165,14 @@ def extract_entities(text: str, document_id: str = None) -> Tuple[List[Entity], 
     
     for ent in doc.ents:
         if ent.label_ in STRUCTURAL_TYPES:
+            # Correct entity type if misclassified (e.g., Alibaba as GPE instead of ORG)
+            corrected_type = correct_entity_type(ent.text, ent.label_)
+            
             # Normalize entity name
-            normalized_name = normalize_entity_name(ent.text, ent.label_)
+            normalized_name = normalize_entity_name(ent.text, corrected_type)
             
             # Create unique key for deduplication
-            entity_key = (normalized_name.lower(), ent.label_)
+            entity_key = (normalized_name.lower(), corrected_type)
             
             if entity_key not in seen_entities:
                 seen_entities.add(entity_key)
@@ -126,7 +182,7 @@ def extract_entities(text: str, document_id: str = None) -> Tuple[List[Entity], 
                 
                 entities.append(Entity(
                     text=normalized_name,
-                    type=ent.label_,
+                    type=corrected_type,  # Use corrected type
                     category=EntityCategory.STRUCTURAL,
                     start_char=ent.start_char,
                     end_char=ent.end_char,
@@ -138,7 +194,37 @@ def extract_entities(text: str, document_id: str = None) -> Tuple[List[Entity], 
     # Extract metadata separately
     metadata = extract_metadata(doc, document_id)
     
-    return entities, metadata
+    # Force-detect common products that SpaCy might miss (add missing entities)
+    force_detect_products = ["echo", "alexa", "siri", "cortana"]
+    text_lower = cleaned_text.lower()
+    
+    for product_name in force_detect_products:
+        if product_name in text_lower and not any(e.text.lower() == product_name for e in entities):
+            # Force create this product entity
+            entities.append(Entity(
+                text=product_name.capitalize(),
+                type="PRODUCT",
+                category=EntityCategory.STRUCTURAL,
+                start_char=text_lower.find(product_name),
+                end_char=text_lower.find(product_name) + len(product_name),
+                context=f"Force-detected product: {product_name}",
+                source_sentence="",
+                document_id=document_id
+            ))
+            print(f"[Force Detection] Added missing product: {product_name.capitalize()}")
+    
+    # Apply semantic filtering (NEW)
+    from app.semantic_validator import SemanticValidator
+    filtered_entities = SemanticValidator.filter_entities(entities)
+    
+    # Debug logging
+    print(f"[Entity Extraction] Total entities before filtering: {len(entities)}")
+    print(f"[Entity Extraction] Total entities after filtering: {len(filtered_entities)}")
+    for e in filtered_entities:
+        print(f"  - {e.text} ({e.type})")
+    
+    return filtered_entities, metadata
+
 
 def extract_dependency_tree(text: str):
     """
