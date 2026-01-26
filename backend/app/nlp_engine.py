@@ -246,5 +246,3 @@ if __name__ == "__main__":
     for key, values in metadata.items():
         if values:
             print(f" - {key}: {[v[0] for v in values]}")
-
-
