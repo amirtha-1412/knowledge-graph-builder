@@ -74,7 +74,75 @@ graph TB
     style NEO fill:#f59e0b,color:#fff
 ```
 
-### Complete Data Flow Pipeline
+
+### API Request-Response Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant React as React Frontend
+    participant API as FastAPI Backend
+    participant SpaCy as SpaCy NLP
+    participant Neo4j as Neo4j Database
+    
+    User->>React: Enter text / Upload PDF
+    React->>React: Set loading state
+    
+    React->>API: POST /build<br/>{text, session_id}
+    
+    API->>API: Generate session_id & document_id
+    
+    API->>SpaCy: extract_entities(text)
+    SpaCy->>SpaCy: NER Processing
+    SpaCy->>SpaCy: Entity Normalization
+    SpaCy->>SpaCy: Metadata Separation
+    SpaCy-->>API: entities[], metadata{}
+    
+    API->>API: infer_relationships(text, metadata)
+    API->>API: Role-based detection
+    API->>API: SVO parsing
+    API->>API: Confidence scoring
+    API-->>API: relationships[]
+    
+    API->>API: extract_events(text, entities)
+    API->>API: Pattern matching
+    API-->>API: events[]
+    
+    API->>API: Semantic validation
+    API->>API: Type checking
+    API->>API: Confidence filtering
+    
+    API->>Neo4j: save_graph_data(entities, relationships, events)
+    Neo4j->>Neo4j: MERGE entities as nodes
+    Neo4j->>Neo4j: MERGE relationships as edges
+    Neo4j->>Neo4j: MERGE events with links
+    Neo4j-->>API: Success
+    
+    API-->>React: {session_id, entities, relationships, events, message}
+    
+    React->>React: Update state
+    React->>API: GET /graph-data?session_id=xxx
+    
+    API->>Neo4j: Query graph visualization data
+    Neo4j->>Neo4j: MATCH (n)-[r]->(m)
+    Neo4j-->>API: {nodes, edges}
+    
+    API-->>React: {nodes: [...], edges: [...]}
+    
+    React->>React: Render vis-network graph
+    React->>User: Display interactive graph
+    
+    User->>React: Request insights
+    React->>API: GET /insights?session_id=xxx
+    
+    API->>Neo4j: Query statistics
+    Neo4j-->>API: {total_entities, total_relationships, entity_types}
+    
+    API-->>React: Insights data
+    React->>User: Display statistics
+```
+
+### Data Flow Pipeline
 
 ```mermaid
 flowchart TD
@@ -148,73 +216,6 @@ flowchart TD
     style End fill:#10b981,color:#fff
     style Neo4jSave fill:#f59e0b,color:#fff
     style Validate fill:#ef4444,color:#fff
-```
-
-### API Request-Response Flow
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant React as React Frontend
-    participant API as FastAPI Backend
-    participant SpaCy as SpaCy NLP
-    participant Neo4j as Neo4j Database
-    
-    User->>React: Enter text / Upload PDF
-    React->>React: Set loading state
-    
-    React->>API: POST /build<br/>{text, session_id}
-    
-    API->>API: Generate session_id & document_id
-    
-    API->>SpaCy: extract_entities(text)
-    SpaCy->>SpaCy: NER Processing
-    SpaCy->>SpaCy: Entity Normalization
-    SpaCy->>SpaCy: Metadata Separation
-    SpaCy-->>API: entities[], metadata{}
-    
-    API->>API: infer_relationships(text, metadata)
-    API->>API: Role-based detection
-    API->>API: SVO parsing
-    API->>API: Confidence scoring
-    API-->>API: relationships[]
-    
-    API->>API: extract_events(text, entities)
-    API->>API: Pattern matching
-    API-->>API: events[]
-    
-    API->>API: Semantic validation
-    API->>API: Type checking
-    API->>API: Confidence filtering
-    
-    API->>Neo4j: save_graph_data(entities, relationships, events)
-    Neo4j->>Neo4j: MERGE entities as nodes
-    Neo4j->>Neo4j: MERGE relationships as edges
-    Neo4j->>Neo4j: MERGE events with links
-    Neo4j-->>API: Success
-    
-    API-->>React: {session_id, entities, relationships, events, message}
-    
-    React->>React: Update state
-    React->>API: GET /graph-data?session_id=xxx
-    
-    API->>Neo4j: Query graph visualization data
-    Neo4j->>Neo4j: MATCH (n)-[r]->(m)
-    Neo4j-->>API: {nodes, edges}
-    
-    API-->>React: {nodes: [...], edges: [...]}
-    
-    React->>React: Render vis-network graph
-    React->>User: Display interactive graph
-    
-    User->>React: Request insights
-    React->>API: GET /insights?session_id=xxx
-    
-    API->>Neo4j: Query statistics
-    Neo4j-->>API: {total_entities, total_relationships, entity_types}
-    
-    API-->>React: Insights data
-    React->>User: Display statistics
 ```
 
 ### NLP Processing Detail
