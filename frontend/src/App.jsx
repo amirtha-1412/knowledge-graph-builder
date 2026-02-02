@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import InputPanel from './components/InputPanel';
 import GraphVisualization from './components/GraphVisualization';
 import InsightsPanel from './components/InsightsPanel';
@@ -118,6 +119,7 @@ function App() {
           </div>
         </div>
       </div>
+      <SpeedInsights />
     </div>
   );
 }
